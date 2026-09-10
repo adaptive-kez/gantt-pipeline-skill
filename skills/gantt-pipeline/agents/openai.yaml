@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gantt Pipeline"
+  short_description: "От ТЗ и задач Aspro до настраиваемого Ганта"
+  default_prompt: "Используй $gantt-pipeline для запуска нового проекта: декомпозиция, задачи Aspro, подтверждение состава, HTML-Гант и экспорт."

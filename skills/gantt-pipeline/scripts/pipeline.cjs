@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const ROOT=path.resolve(__dirname,'..');
+const slug=/^[a-z][a-z0-9-]{0,63}$/;
+const stageDefs={
+ website:[['prep','Подготовка и переносы','setup','#abb5ab'],['design','Дизайн и согласование','design','#8b82af'],['qa','UQA макетов','qa','#57959a'],['front','Фронтенд','front','#be9364'],['back','Бэкенд','back','#61886c'],['implementation-qa','QA реализации','qa','#a48898'],['release','Приёмка и запуск','release','#687970']],
+ identity:[['research','Исследование','strategy','#abb5ab'],['concept','Концепции','design','#8b82af'],['identity','Развитие айдентики','design','#57959a'],['review','Согласование','review','#be9364'],['guidelines','Гайдлайн и носители','design','#61886c'],['handoff','Передача','review','#a48898']],
+ mobile:[['research','Исследование','strategy','#abb5ab'],['ux','UX и прототип','design','#8b82af'],['ui','UI и дизайн-система','design','#57959a'],['app','Разработка приложения','app','#be9364'],['api','API и интеграции','back','#61886c'],['qa','QA приложения','qa','#a48898'],['release','Публикация в магазинах','release','#687970']]
+};
+function init(mode,id,name){if(!stageDefs[mode])throw Error('Mode must be website, identity or mobile');if(!slug.test(id)||!name?.trim())throw Error('Supply a slug id and project name');const stages=stageDefs[mode].map(([id,label,pool,color])=>({id,label,pool,color}));return{version:1,id,name,mode,sources:[],stages,settings:{start:null,holidays:[],capacities:Object.fromEntries(stages.filter(s=>s.pool).map(s=>[s.pool,null])),stageDurations:Object.fromEntries(stages.map(s=>[s.id,null])),preserveSourceDates:true,overrides:{}},tasks:[]};}
+function stable(v){if(Array.isArray(v))return'['+v.map(stable).join(',')+']';if(v&&typeof v==='object')return'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}';return JSON.stringify(v);}
+const hash=v=>crypto.createHash('sha256').update(stable(v)).digest('hex');
+const scope=p=>({id:p.id,name:p.name,mode:p.mode,stages:p.stages,tasks:p.tasks.map(t=>({id:t.id,title:t.title,stage:t.stage,workstream:t.workstream,description:t.description,acceptance:t.acceptance,sourceRefs:t.sourceRefs,dependsOn:t.dependsOn,resourceGroup:t.resourceGroup,milestone:t.milestone}))});
+function safeLink(s){try{const u=new URL(s);return u.protocol==='https:'&&!u.username&&!u.password&&![...u.searchParams.keys()].some(k=>/key|token|secret|auth/i.test(k))?u.href:null;}catch{return null;}}
+function publicProject(p){
+ const out={version:p.version,id:p.id,name:p.name,mode:p.mode,sources:[],stages:p.stages.map(s=>({id:s.id,label:s.label,pool:s.pool,color:s.color})),settings:{start:p.settings.start??null,holidays:[...(p.settings.holidays||[])],capacities:{...p.settings.capacities},stageDurations:{...p.settings.stageDurations},preserveSourceDates:p.settings.preserveSourceDates,overrides:structuredClone(p.settings.overrides||{})},tasks:p.tasks.map(t=>({id:t.id,title:t.title,stage:t.stage,workstream:t.workstream||'',description:'',acceptance:[],sourceRefs:[],dependsOn:[...t.dependsOn],duration:t.duration??null,sourceStart:t.sourceStart??null,sourceEnd:t.sourceEnd??null,notBefore:t.notBefore??null,blocker:t.blocker?'Ожидаются вводные; уточните в задаче Aspro':null,status:t.status,milestone:!!t.milestone,resourceGroup:t.resourceGroup??null,aspro:t.aspro?{id:t.aspro.id,projectId:t.aspro.projectId,stageId:t.aspro.stageId,url:safeLink(t.aspro.url)}:null}))};
+ if(p.sync?.url==='/api/aspro/snapshot')out.sync={url:p.sync.url};return out;
+}
+function validateContext(p){
+ const errors=[];if(!p||p.version!==1||!slug.test(p.id||'')||!stageDefs[p.mode])return['Invalid project identity/version/mode'];
+ if(!Array.isArray(p.sources)||!Array.isArray(p.tasks))return['sources/tasks must be arrays'];
+ const sources=new Map();for(const s of p.sources){if(!s||typeof s.id!=='string'||sources.has(s.id)||typeof s.text!=='string')errors.push('Invalid or duplicate source');else sources.set(s.id,s);}
+ for(const t of p.tasks){if(!t||typeof t.description!=='string'||!Array.isArray(t.acceptance)||!Array.isArray(t.sourceRefs)){errors.push(`${t?.id}: description/acceptance/sourceRefs required`);continue;}if(!t.description.trim()||!t.acceptance.length||t.acceptance.some(x=>typeof x!=='string'||!x.trim()))errors.push(`${t.id}: context and acceptance criteria required`);for(const r of t.sourceRefs){const s=sources.get(r.sourceId);if(!s||typeof r.quote!=='string'||!r.quote.trim()||!s.text.includes(r.quote))errors.push(`${t.id}: source quote not present`);}if(!t.sourceRefs.length&&!/^Предложение:/.test(t.title))errors.push(`${t.id}: task needs a source or explicit proposal label`);}
+ return errors;
+}
+function assertProject(p){const errors=[...validateContext(p),...require('../assets/scheduler.js').validate(p)];if(errors.length)throw Error(errors.join('\n'));}
+const positive=n=>Number.isSafeInteger(n)&&n>0;
+function assertSnapshot(snapshot){if(!snapshot||snapshot.complete!==true||!Array.isArray(snapshot.projects)||!Array.isArray(snapshot.stages)||!Array.isArray(snapshot.tasks))throw Error('Complete paginated Aspro snapshot with projects/stages/tasks required');const seen=new Set();for(const t of snapshot.tasks){if(!positive(Number(t.id))||seen.has(Number(t.id)))throw Error('Duplicate/invalid Aspro task IDs');seen.add(Number(t.id));}}
+function targets(p,config,snapshot){
+ assertSnapshot(snapshot);if(!['project_stage_id','group_id'].includes(config.stageField))throw Error('Resolve stageField from live schema first');
+ for(const stage of new Set(p.tasks.map(t=>t.stage))){const b=config.bindings?.[stage];if(!b||!positive(b.projectId)||!positive(b.stageId))throw Error(`Missing verified binding: ${stage}`);if(!snapshot.projects.some(x=>Number(x.id)===b.projectId))throw Error(`Project not read back: ${b.projectId}`);if(!snapshot.stages.some(x=>Number(x.id)===b.stageId&&Number(x.project_id)===b.projectId))throw Error(`Stage does not belong to project: ${stage}`);}
+}
+function contextDescription(p,t){return[
+ t.description.trim(), '\nРезультат / готово, когда:',...t.acceptance.map(x=>'• '+x),
+ '\nИсточники:',...t.sourceRefs.map(r=>{const s=p.sources.find(s=>s.id===r.sourceId);return`${s?.title||r.sourceId}: «${r.quote}»`;}),
+ '\nЗависит от: '+(t.dependsOn.length?t.dependsOn.join(', '):'нет'),
+ t.blocker?'\nУсловия старта: '+t.blocker:'',
+ '\nОценка: '+(t.duration===null?'требуется оценка':t.duration+' рабочих дней (не часы time_estimate)'),
+ `\nGantt Pipeline: ${p.id}/${t.id}`
+].filter(Boolean).join('\n');}
+function matched(p,t,snapshot){const byRef=snapshot.tasks.filter(x=>x.ref==='gantt-pipeline'&&x.ref_id===p.id+':'+t.id);const bound=t.aspro?.id?snapshot.tasks.find(x=>Number(x.id)===t.aspro.id):null;if(t.aspro?.id&&!bound)throw Error(`${t.id}: bound remote task missing; verify scope or removal before creation`);if(byRef.length>1||(bound&&byRef.length&&Number(byRef[0].id)!==Number(bound.id)))throw Error(`${t.id}: ambiguous remote identity`);return bound||byRef[0]||null;}
+function asproPlan(p,config,snapshot){assertProject(p);targets(p,config,snapshot);const operations=[];for(const t of p.tasks){const b=config.bindings[t.stage],existing=matched(p,t,snapshot);const data={name:t.title,description:contextDescription(p,t),module:'st',model:'project',model_id:b.projectId,[config.stageField]:b.stageId,parent_id:0,ref:'gantt-pipeline',ref_id:p.id+':'+t.id};
+ if(existing){if(existing.module!=='st'||existing.model!=='project'||Number(existing.model_id)!==b.projectId||Number(existing[config.stageField])!==b.stageId)throw Error(`${t.id}: existing task is in another project/section; resolve explicitly`);const changes=Object.fromEntries(Object.entries(data).filter(([k,v])=>String(existing[k]??'')!==String(v)));operations.push({taskId:t.id,action:Object.keys(changes).length?'update':'noop',remoteId:Number(existing.id),module:'task',entity:'tasks',data:changes});}
+ else{const collision=snapshot.tasks.some(x=>x.module==='st'&&x.model==='project'&&Number(x.model_id)===b.projectId&&String(x.name).trim().toLowerCase()===t.title.trim().toLowerCase());if(collision)throw Error(`${t.id}: same-name remote task requires explicit binding; creation stopped`);operations.push({taskId:t.id,action:'create',module:'task',entity:'tasks',data});}}
+ return{version:1,projectId:p.id,scopeHash:hash(scope(p)),operations,notes:['Local plan only. Preview and execute using current Aspro connector after authorization.','No deletion, assignment, status or scheduling writes. Confirm PM scope only after remote read-back.']};}
+function sourceDate(v){if(v===null||v===''||v===undefined||String(v).startsWith('0000-00-00'))return null;const m=String(v).match(/^(\d{4}-\d{2}-\d{2})(?:$|[ T])/);if(!m)throw Error('Invalid Aspro date');return m[1];}
+function reconcile(p,config,snapshot){assertProject(p);targets(p,config,snapshot);const result=structuredClone(p);for(const t of result.tasks){const b=config.bindings[t.stage],r=matched(p,t,snapshot);if(!r)throw Error(`${t.id}: no remote read-back`);if(r.module!=='st'||r.model!=='project'||Number(r.model_id)!==b.projectId||Number(r[config.stageField])!==b.stageId||Number(r.parent_id||0)!==0)throw Error(`${t.id}: remote binding/parent mismatch`);if(r.name!==t.title)throw Error(`${t.id}: remote title differs; reconcile scope first`);let url=t.aspro?.url||null;if(config.taskUrlTemplate){if(!config.taskUrlTemplate.includes('{id}'))throw Error('Verified task URL template must contain {id}');url=safeLink(config.taskUrlTemplate.replace('{id}',String(r.id)));if(!url)throw Error('Unsafe task URL template');}t.aspro={id:Number(r.id),projectId:b.projectId,stageId:b.stageId,url};if('plan_start_date' in r)t.sourceStart=sourceDate(r.plan_start_date);if('deadline' in r)t.sourceEnd=sourceDate(r.deadline);if('status' in r&&t.status!=='included')t.status=Number(r.status)===5?'completed':'planned';}
+ assertProject(result);return result;}
+function bindingHash(p){return hash(p.tasks.map(t=>({id:t.id,aspro:t.aspro?{id:t.aspro.id,projectId:t.aspro.projectId,stageId:t.aspro.stageId}:null})));}
+function approval(p,by){assertProject(p);if(!by?.trim())throw Error('Record actual PM confirmation; approved-by required');if(!p.tasks.length||p.tasks.some(t=>!t.aspro||!positive(t.aspro.id)))throw Error('Every task must be linked from Aspro read-back before PM approval');return{version:1,projectId:p.id,scopeHash:hash(scope(p)),bindingsHash:bindingHash(p),approvedBy:by,approvedAt:new Date().toISOString()};}
+function approved(p,a){return !!a&&a.projectId===p.id&&a.scopeHash===hash(scope(p))&&a.bindingsHash===bindingHash(p)&&typeof a.approvedBy==='string'&&a.approvedBy.trim()&&typeof a.approvedAt==='string';}
+function build(p,a,{preview=false}={}){assertProject(p);if(!preview&&!approved(p,a))throw Error('PM approval missing or stale. Confirm read-back scope before final Gantt. Use --preview only for a clearly labelled local draft.');const client=publicProject(p);if(preview)client.name='ЧЕРНОВИК · '+client.name;require('../assets/scheduler.js').calculate(client);let s=fs.readFileSync(path.join(ROOT,'assets/shell.html'),'utf8');const parts={__STYLE__:fs.readFileSync(path.join(ROOT,'assets/style.css'),'utf8'),__PROJECT__:JSON.stringify(client).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'),__ENGINE__:fs.readFileSync(path.join(ROOT,'assets/scheduler.js'),'utf8'),__EXPORT__:fs.readFileSync(path.join(ROOT,'assets/export.js'),'utf8'),__APP__:fs.readFileSync(path.join(ROOT,'assets/app.js'),'utf8')};for(const [key,value]of Object.entries(parts)){if(!s.includes(key))throw Error('Missing HTML placeholder '+key);s=s.replace(key,()=>value);}return s;}
+function writeExclusive(file,data){fs.mkdirSync(path.dirname(path.resolve(file)),{recursive:true});fs.writeFileSync(file,data,{flag:'wx'});}
+function parseArgs(args){const out={};for(let i=0;i<args.length;i++){const k=args[i];if(!k.startsWith('--'))throw Error('Expected --option');out[k.slice(2)]=args[i+1]&&!args[i+1].startsWith('--')?args[++i]:true;}return out;}
+function json(file){if(typeof file!=='string')throw Error('Missing input path');return JSON.parse(fs.readFileSync(file,'utf8'));}
+async function main(argv){const [cmd,...rest]=argv;if(cmd==='--help'||cmd==='help'){console.log('Commands: init, validate, plan-aspro, reconcile, approve, build, export. See SKILL.md.');return;}const o=parseArgs(rest);let output;
+ if(cmd==='init')output=init(o.mode||'website',o.id,o.name);
+ else if(cmd==='validate'){assertProject(json(o.project));console.log('Project context and schedule schema valid');return;}
+ else if(cmd==='plan-aspro')output=asproPlan(json(o.project),json(o.config),json(o.snapshot));
+ else if(cmd==='reconcile')output=reconcile(json(o.project),json(o.config),json(o.snapshot));
+ else if(cmd==='approve')output=approval(json(o.project),o['approved-by']);
+ else if(cmd==='build'){const p=json(o.project);output=build(p,o.approval?json(o.approval):null,{preview:!!o.preview});}
+ else if(cmd==='export'){const p=json(o.project);assertProject(p);if(!approved(p,json(o.approval)))throw Error('PM approval missing or stale');const c=publicProject(p),r=require('../assets/scheduler.js').calculate(c);output=require('../assets/export.js').GanttExport.workbook(c,r);}
+ else throw Error('Commands: init, validate, plan-aspro, reconcile, approve, build, export. See SKILL.md.');
+ if(!o.out)throw Error('--out required');writeExclusive(o.out,typeof output==='string'||output instanceof Uint8Array?output:JSON.stringify(output,null,2)+'\n');console.log(`Saved ${o.out}`);
+}
+module.exports={init,scope,hash,publicProject,validateContext,asproPlan,reconcile,approval,approved,build,assertProject,bindingHash};
+if(require.main===module)main(process.argv.slice(2)).catch(e=>{console.error(e.message);process.exitCode=1;});

@@ -1,0 +1,34 @@
+{
+  "stageField": "project_stage_id",
+  "bindings": {
+    "prep": {
+      "projectId": 10,
+      "stageId": 20
+    },
+    "design": {
+      "projectId": 10,
+      "stageId": 21
+    },
+    "qa": {
+      "projectId": 10,
+      "stageId": 22
+    },
+    "front": {
+      "projectId": 10,
+      "stageId": 23
+    },
+    "back": {
+      "projectId": 10,
+      "stageId": 24
+    },
+    "implementation-qa": {
+      "projectId": 10,
+      "stageId": 25
+    },
+    "release": {
+      "projectId": 10,
+      "stageId": 26
+    }
+  },
+  "taskUrlTemplate": "https://example.aspro.cloud/tasks/{id}"
+}

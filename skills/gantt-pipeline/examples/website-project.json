@@ -1,0 +1,444 @@
+{
+  "version": 1,
+  "id": "demo-website",
+  "name": "Учебный сайт — пример",
+  "mode": "website",
+  "sources": [
+    {
+      "id": "brief",
+      "title": "Синтетическое ТЗ для тестирования",
+      "text": "Создать главную, страницу услуги и контакты. Передать каждую страницу через дизайн, UQA и фронтенд. Подключить CMS после готовности всех страниц. Провести QA реализации и запуск. До начала фронтенда должно быть готово окружение."
+    }
+  ],
+  "stages": [
+    {
+      "id": "prep",
+      "label": "Подготовка и переносы",
+      "pool": null,
+      "color": "#abb5ab"
+    },
+    {
+      "id": "design",
+      "label": "Дизайн и согласование",
+      "pool": "design",
+      "color": "#8b82af"
+    },
+    {
+      "id": "qa",
+      "label": "UQA макетов",
+      "pool": "qa",
+      "color": "#57959a"
+    },
+    {
+      "id": "front",
+      "label": "Фронтенд",
+      "pool": "front",
+      "color": "#be9364"
+    },
+    {
+      "id": "back",
+      "label": "Бэкенд",
+      "pool": "back",
+      "color": "#61886c"
+    },
+    {
+      "id": "implementation-qa",
+      "label": "QA реализации",
+      "pool": "qa",
+      "color": "#a48898"
+    },
+    {
+      "id": "release",
+      "label": "Приёмка и запуск",
+      "pool": "release",
+      "color": "#687970"
+    }
+  ],
+  "settings": {
+    "start": "2027-03-01",
+    "holidays": [
+      "2027-03-08"
+    ],
+    "capacities": {
+      "design": 2,
+      "qa": 1,
+      "front": 1,
+      "back": 1,
+      "release": 1
+    },
+    "stageDurations": {
+      "prep": null,
+      "design": null,
+      "qa": null,
+      "front": null,
+      "back": null,
+      "implementation-qa": null,
+      "release": null
+    },
+    "preserveSourceDates": true,
+    "overrides": {}
+  },
+  "tasks": [
+    {
+      "id": "ENV",
+      "title": "Окружение готово",
+      "stage": "prep",
+      "workstream": "Подготовка",
+      "description": "Учебная задача. До начала фронтенда должно быть готово окружение.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "До начала фронтенда должно быть готово окружение."
+        }
+      ],
+      "dependsOn": [],
+      "duration": 0,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": "2027-03-03",
+      "blocker": null,
+      "status": "planned",
+      "milestone": true,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "D1",
+      "title": "Дизайн: Главная",
+      "stage": "design",
+      "workstream": "Главная",
+      "description": "Учебная задача. Создать главную, страницу услуги и контакты.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Создать главную, страницу услуги и контакты."
+        }
+      ],
+      "dependsOn": [],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "Q1",
+      "title": "UQA: Главная",
+      "stage": "qa",
+      "workstream": "Главная",
+      "description": "Учебная задача. Передать каждую страницу через дизайн, UQA и фронтенд.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Передать каждую страницу через дизайн, UQA и фронтенд."
+        }
+      ],
+      "dependsOn": [
+        "D1"
+      ],
+      "duration": 1,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "F1",
+      "title": "Фронтенд: Главная",
+      "stage": "front",
+      "workstream": "Главная",
+      "description": "Учебная задача. Передать каждую страницу через дизайн, UQA и фронтенд.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Передать каждую страницу через дизайн, UQA и фронтенд."
+        }
+      ],
+      "dependsOn": [
+        "Q1",
+        "ENV"
+      ],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "D2",
+      "title": "Дизайн: Услуга",
+      "stage": "design",
+      "workstream": "Услуга",
+      "description": "Учебная задача. Создать главную, страницу услуги и контакты.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Создать главную, страницу услуги и контакты."
+        }
+      ],
+      "dependsOn": [],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "Q2",
+      "title": "UQA: Услуга",
+      "stage": "qa",
+      "workstream": "Услуга",
+      "description": "Учебная задача. Передать каждую страницу через дизайн, UQA и фронтенд.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Передать каждую страницу через дизайн, UQA и фронтенд."
+        }
+      ],
+      "dependsOn": [
+        "D2"
+      ],
+      "duration": 1,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "F2",
+      "title": "Фронтенд: Услуга",
+      "stage": "front",
+      "workstream": "Услуга",
+      "description": "Учебная задача. Передать каждую страницу через дизайн, UQA и фронтенд.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Передать каждую страницу через дизайн, UQA и фронтенд."
+        }
+      ],
+      "dependsOn": [
+        "Q2",
+        "ENV"
+      ],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "D3",
+      "title": "Дизайн: Контакты",
+      "stage": "design",
+      "workstream": "Контакты",
+      "description": "Учебная задача. Создать главную, страницу услуги и контакты.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Создать главную, страницу услуги и контакты."
+        }
+      ],
+      "dependsOn": [],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "Q3",
+      "title": "UQA: Контакты",
+      "stage": "qa",
+      "workstream": "Контакты",
+      "description": "Учебная задача. Передать каждую страницу через дизайн, UQA и фронтенд.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Передать каждую страницу через дизайн, UQA и фронтенд."
+        }
+      ],
+      "dependsOn": [
+        "D3"
+      ],
+      "duration": 1,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "F3",
+      "title": "Фронтенд: Контакты",
+      "stage": "front",
+      "workstream": "Контакты",
+      "description": "Учебная задача. Передать каждую страницу через дизайн, UQA и фронтенд.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Передать каждую страницу через дизайн, UQA и фронтенд."
+        }
+      ],
+      "dependsOn": [
+        "Q3",
+        "ENV"
+      ],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "B1",
+      "title": "Подключение CMS",
+      "stage": "back",
+      "workstream": "Интеграция",
+      "description": "Учебная задача. Подключить CMS после готовности всех страниц.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Подключить CMS после готовности всех страниц."
+        }
+      ],
+      "dependsOn": [
+        "F1",
+        "F2",
+        "F3"
+      ],
+      "duration": 3,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "IQ",
+      "title": "QA реализации",
+      "stage": "implementation-qa",
+      "workstream": "Интеграция",
+      "description": "Учебная задача. Провести QA реализации и запуск.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Провести QA реализации и запуск."
+        }
+      ],
+      "dependsOn": [
+        "B1"
+      ],
+      "duration": 2,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    },
+    {
+      "id": "REL",
+      "title": "Приёмка и запуск",
+      "stage": "release",
+      "workstream": "Запуск",
+      "description": "Учебная задача. Провести QA реализации и запуск.",
+      "acceptance": [
+        "Результат проверен по учебному ТЗ"
+      ],
+      "sourceRefs": [
+        {
+          "sourceId": "brief",
+          "quote": "Провести QA реализации и запуск."
+        }
+      ],
+      "dependsOn": [
+        "IQ"
+      ],
+      "duration": 1,
+      "sourceStart": null,
+      "sourceEnd": null,
+      "notBefore": null,
+      "blocker": null,
+      "status": "planned",
+      "milestone": false,
+      "resourceGroup": null,
+      "aspro": null
+    }
+  ]
+}
