@@ -13,7 +13,10 @@ Portable JSON. No account, tenant, task or site IDs are supplied by the skill. I
   "settings": {
     "start": null,
     "holidays": [],
+    "calendar": "weekdays",
+    "dayHours": {},
     "capacities": {"design":null},
+    "resources": {"design":{"label":"Дизайнер","hoursPerDay":null,"shortDayPolicy":"subtract"}},
     "stageDurations": {"design":null},
     "preserveSourceDates": true,
     "overrides": {}
@@ -24,7 +27,7 @@ Portable JSON. No account, tenant, task or site IDs are supplied by the skill. I
     "sourceRefs":[{"sourceId":"brief","quote":"Точная цитата"}],
     "dependsOn":[], "duration":null, "sourceStart":null, "sourceEnd":null,
     "notBefore":null, "blocker":null, "status":"planned", "milestone":false,
-    "resourceGroup":null,
+    "resourceGroup":null, "estimateHours":null, "parallelism":1,
     "aspro":null
   }]
 }
@@ -38,11 +41,13 @@ resourceGroup optionally joins tasks representing one jointly estimated work pac
 
 sourceStart/sourceEnd are ISO YYYY-MM-DD confirmed source intervals. Preserve them when enabled; flag resource/dependency conflicts without silently rewriting Aspro dates. A sourceEnd without sourceStart is a deadline, not proof of completion. Do not derive a start automatically from an overdue deadline. Local task overrides may explicitly replace source dates for scenario exploration.
 
-settings.overrides[taskId] = {moveTo?:"YYYY-MM-DD",duration?:1,ready?:"YYYY-MM-DD"}. moveTo sets requested start subject to predecessors/calendar/resources and preserves effective duration. ready explicitly clears that task's blocker; it never clears predecessor blockers. A milestone can move via moveTo. Source input must remain immutable.
+settings.overrides[taskId] = {moveTo?:"YYYY-MM-DD",duration?:1,ready?:"YYYY-MM-DD",parallelism?:1|"all"}. moveTo sets requested start subject to predecessors/calendar/resources; it preserves estimated effort for hourly tasks, or effective working-day duration for day-based tasks. Explicit duration overrides hourly calculation until removed. ready clears only that task's blocker, never peers' or predecessors' blockers. A milestone can move via moveTo. Source input must remain immutable.
 
 aspro when verified: {id:123,projectId:456,stageId:789,url:"https://customer.example/task/123"}. Omit all real links from public examples. Context stays in the project JSON and internal Aspro payload; client HTML/export omits source text and internal descriptions by default.
 
-Calendar: Monday–Friday minus settings.holidays. Unknown capacities/durations/dates remain unknown. Config fields may be overridden interactively. Date horizon max5years, tasks max500. No implicit holidays from a past project.
+Hourly tasks: positive `estimateHours` ≤100000, a stage pool and known `settings.resources[pool].hoursPerDay` (>0 and ≤8). `parallelism` is 1–20 or `"all"`, default 1, and may not exceed available capacity. Multiple people accelerate only explicitly divisible tasks. Source dates still take precedence in preserve mode. See [scheduling.md](scheduling.md) for daily accumulation, shortened-day policy, resource reservation, grouping, import and limitations.
+
+Calendar: generic `weekdays` or verified `ru-2026` (only 2026). `holidays` adds nonworking dates; `dayHours` is a date→0–8 hours map overriding the preset, including working weekends. Out-of-coverage RF scheduling is blocked. Unknown capacities/hours/durations/dates remain unknown. Config fields may be overridden interactively. Date horizon max5years, tasks max500. No implicit holidays from a past project.
 
 ## Runtime API
 
@@ -50,3 +55,5 @@ UMD/CommonJS: GanttEngine.validate(project) → string[]; GanttEngine.calculate(
 Result: {tasks,config,finish,complete,warnings,criticalEdges,criticalNote,resourceOrderValid}. tasks keep source fields and add {start:null|string,end:null|string,duration:null|number,blocked:null|string,critical:boolean,totalFloat:null|number,freeFloat:null|number,requestedStart?:string,moveConstraint?:string}. finish is last calculated end, complete only if every required task is scheduled/completed/included. Unknown reserve is null, never zero. Critical edges {from,to,resource:boolean}. Resource critical edges describe current lane order, do not become business dependencies in JSON/Aspro. Respect source conflicts; mark partial critical scope and qualifications.
 
 GanttExport.workbook(project,result) → Uint8Array for static styled XLSX. Build script embeds only sanitized project and this exact runtime in a single HTML. Settings JSON is portable between the same project ID; full project JSON is retained as the agent's internal working file.
+
+Calculated hourly/day-based tasks also expose `workers` and `scheduleBasis:"hours"|"days"`. `GanttEngine.calendar(settings)` exposes `hours(date)`, `covered(date)` and workday helpers; the legacy holidays-array argument remains supported. Source-preserved tasks need not have a calculation basis. XLSX includes original hours, applied workers, daily allocation and calendar hours, but remains a static snapshot.

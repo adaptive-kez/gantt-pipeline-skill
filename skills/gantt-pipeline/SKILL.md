@@ -1,6 +1,6 @@
 ---
 name: gantt-pipeline
-description: Turn a new project brief into contextual Aspro tasks, confirm the task pool with the project manager, then generate an interactive HTML Gantt with resources, dependencies, critical path, styled spreadsheet export and optional Sites publishing. Use for website project planning and reusable Gantt delivery; identity and mobile modes provide separate starting structures.
+description: Turn a project brief and hourly estimate into contextual Aspro tasks and an interactive HTML Gantt with role-based staffing, hours per person, production calendar, editable dates, dependency-aware drag, critical path and visual spreadsheet export. Confirm the task pool with the PM before final delivery. Use for website project planning and reusable Gantt delivery; identity and mobile modes provide separate starting structures.
 ---
 
 # Gantt Pipeline
@@ -18,6 +18,18 @@ Read [modes.md](references/modes.md) for the selected mode and [project-schema.m
 2. Decompose semantically. Give each task stable local ID, result, context, acceptance criteria and exact supporting quote. Keep migrations, preparation, content, approvals and unique pages visible when in scope. Proposed work without source support must be labelled `Предложение:`. Preserve the full source only in the internal working JSON.
 3. Use explicit dependencies, never row order, to model mandatory sequences and backend batches. Share a resource pool between QA phases when the same capacity performs them. Set `resourceGroup` only for one jointly estimated package; do not double-count its page rows. Estimates and capacity remain null unless supplied or explicitly accepted as assumptions. Completed dates are not inferred from passed deadlines.
 4. Run `node scripts/pipeline.cjs validate --project project.json`. Resolve graph/input errors; leave missing business inputs as visible blockers. Do not invent a complete launch date.
+
+## Estimates, people and production calendar
+
+Read [scheduling.md](references/scheduling.md) before importing hours or changing scheduling behavior. Collect a role roster: **number of people × allocated hours/day/person**, not an unexplained number of streams. Include PM, art director, tech lead and production roles when present in the brief; neither their participation nor a count of one is a default fact. Let the PM change counts and daily allocation in the same team panel.
+
+Import an existing estimate into the decomposed tasks by stable ID or unambiguous page/stage:
+
+`node scripts/pipeline.cjs import-estimate --project project.json --estimate estimate.csv --team team.json --out project-estimated.json`
+
+Keep original person-hours in `estimateHours`. A second executor can run another task in parallel; speedup of the **same** task requires explicit divisibility (`parallelism:2` or `"all"`). Ask if unclear. Never silently divide every estimate by the whole team. Use supplied project start and automatically computed finish. Choose the verified calendar for the relevant year/region: bundled RF five-day calendar covers **2026 only**, includes transfers and shortened days; out-of-coverage work is visibly blocked. Do not silently switch to weekdays. State and confirm the allocation rule for shortened days; it is a planning assumption, not a legal employment determination.
+
+For new estimates use `preserveSourceDates:false`; for a read-back snapshot, preserve confirmed source intervals until a local scenario change is requested. Explain the difference. Manual start shifts retain effort; changing end/duration creates an explicit day override, reversible with **«Считать по часам сметы»**. Recalculate dependencies and resource queues after each valid edit. Keep original source dates immutable. In task details expose start, finish, working-day duration and workers; drag uses day snapping, a visible candidate interval, Escape and undo. Never hide unresolved constraints behind a seemingly successful requested date.
 
 ## Aspro task pool, then PM confirmation
 
@@ -39,7 +51,7 @@ Read [delivery.md](references/delivery.md). Build the same bundled interface:
 
 `node scripts/pipeline.cjs build --project project-linked.json --approval approval.json --out gantt.html`
 
-The result is a standalone HTML with schedule controls, resource capacities, source-date preservation, stage/workstream grouping, zoom, links, critical path and total/free float, task details, Aspro links, drag/Escape/undo, settings save/load/share and spreadsheet export. Local edits are scenarios; they do not write to Aspro. Source text, internal task descriptions and credentials do not belong in client HTML.
+The result is a standalone HTML with compact date summary under the title, team controls (roles, people and hours/person/day), source-date preservation, stage/workstream grouping, zoom, links, critical path and total/free float, editable task start/end/duration, Aspro links, day-snapped drag/Escape/undo, settings save/load/share and spreadsheet export. Local edits are scenarios; they do not write to Aspro. Source text, internal task descriptions and credentials do not belong in client HTML.
 
 Validate dependency/resource behavior on representative tasks and view the rendered result. Identify partial critical scope, fixed-source conflicts and unestimated work. Export the current scenario using **Экспорт Excel**; verify the timeline blocks, dates, grouping, colors and critical markings after opening/converting in Google Sheets. The XLSX/Google version is a styled static snapshot, not a formula-based scheduling engine. Retain the internal project JSON for future changes.
 

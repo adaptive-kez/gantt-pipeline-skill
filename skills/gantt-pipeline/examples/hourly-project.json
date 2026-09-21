@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "synthetic-hourly-site",
+  "name": "Тест · сайт студии · часы и команда",
+  "mode": "website",
+  "sources": [{"id":"brief","title":"Вымышленное учебное ТЗ","text":"Сделать главную и страницу проекта. Подготовить окружение. Согласовать дизайн. Сверстать страницы. Проверить и выпустить сайт. Учебная смета: главная 34 часа, страница проекта 16 часов, окружение 4 часа, согласование 4 часа, вёрстка главной 16 часов, вёрстка проекта 12 часов, тестирование 8 часов, выпуск 2 часа. Дизайн главной можно разделить между всеми дизайнерами; остальные задачи выполняет один человек. Старт 2 ноября 2026. В каждой роли один исполнитель: дизайнер 4 часа в день, арт-директор 2, техлид 4, верстальщик 4, QA 4, PM 2. В сокращённый день доступность каждого меньше на час."}],
+  "stages": [
+    {"id":"design","label":"Дизайн","color":"#8B82AF","pool":"design"},
+    {"id":"review","label":"Согласование","color":"#AE8D47","pool":"art"},
+    {"id":"setup","label":"Окружение","color":"#52788E","pool":"tech"},
+    {"id":"frontend","label":"Вёрстка","color":"#47765C","pool":"frontend"},
+    {"id":"qa","label":"Тестирование","color":"#138391","pool":"qa"},
+    {"id":"release","label":"Выпуск","color":"#386858","pool":"pm"}
+  ],
+  "settings": {
+    "start":"2026-11-02","calendar":"ru-2026","holidays":[],"dayHours":{},
+    "capacities":{"design":1,"art":1,"tech":1,"frontend":1,"qa":1,"pm":1},
+    "resources":{
+      "design":{"label":"Дизайнер","hoursPerDay":4,"shortDayPolicy":"subtract"},
+      "art":{"label":"Арт-директор","hoursPerDay":2,"shortDayPolicy":"subtract"},
+      "tech":{"label":"Техлид","hoursPerDay":4,"shortDayPolicy":"subtract"},
+      "frontend":{"label":"Верстальщик","hoursPerDay":4,"shortDayPolicy":"subtract"},
+      "qa":{"label":"Тестировщик","hoursPerDay":4,"shortDayPolicy":"subtract"},
+      "pm":{"label":"Проджект-менеджер","hoursPerDay":2,"shortDayPolicy":"subtract"}
+    },
+    "stageDurations":{},"preserveSourceDates":false,"overrides":{}
+  },
+  "tasks":[
+    {"id":"D1","title":"Главная · дизайн","stage":"design","workstream":"Главная","description":"Учебный делимый дизайн главной.","acceptance":["Макет главной подготовлен"],"sourceRefs":[{"sourceId":"brief","quote":"главная 34 часа"}],"dependsOn":[],"estimateHours":34,"parallelism":"all","duration":null,"status":"planned"},
+    {"id":"D2","title":"Страница проекта · дизайн","stage":"design","workstream":"Проект","description":"Учебный макет страницы проекта.","acceptance":["Макет страницы подготовлен"],"sourceRefs":[{"sourceId":"brief","quote":"страница проекта 16 часов"}],"dependsOn":[],"estimateHours":16,"parallelism":1,"duration":null,"status":"planned"},
+    {"id":"S1","title":"Подготовка окружения","stage":"setup","workstream":"Подготовка","description":"Учебное окружение для разработки.","acceptance":["Окружение доступно"],"sourceRefs":[{"sourceId":"brief","quote":"окружение 4 часа"}],"dependsOn":[],"estimateHours":4,"duration":null,"status":"planned"},
+    {"id":"A1","title":"Согласование макетов","stage":"review","workstream":"Согласование","description":"Проверить оба учебных макета.","acceptance":["Макеты согласованы"],"sourceRefs":[{"sourceId":"brief","quote":"Согласовать дизайн."}],"dependsOn":["D1","D2"],"estimateHours":4,"duration":null,"status":"planned"},
+    {"id":"F1","title":"Главная · вёрстка","stage":"frontend","workstream":"Главная","description":"Учебная вёрстка по макету.","acceptance":["Главная сверстана"],"sourceRefs":[{"sourceId":"brief","quote":"вёрстка главной 16 часов"}],"dependsOn":["A1","S1"],"estimateHours":16,"duration":null,"status":"planned"},
+    {"id":"F2","title":"Страница проекта · вёрстка","stage":"frontend","workstream":"Проект","description":"Учебная вёрстка страницы проекта.","acceptance":["Страница сверстана"],"sourceRefs":[{"sourceId":"brief","quote":"вёрстка проекта 12 часов"}],"dependsOn":["A1","S1"],"estimateHours":12,"duration":null,"status":"planned"},
+    {"id":"Q1","title":"Проверка сайта","stage":"qa","workstream":"Запуск","description":"Проверить обе страницы.","acceptance":["Ошибки исправлены"],"sourceRefs":[{"sourceId":"brief","quote":"тестирование 8 часов"}],"dependsOn":["F1","F2"],"estimateHours":8,"duration":null,"status":"planned"},
+    {"id":"R1","title":"Приёмка и выпуск","stage":"release","workstream":"Запуск","description":"Учебная приёмка перед выпуском.","acceptance":["Сайт принят"],"sourceRefs":[{"sourceId":"brief","quote":"выпуск 2 часа"}],"dependsOn":["Q1"],"estimateHours":2,"duration":null,"status":"planned"}
+  ]
+}

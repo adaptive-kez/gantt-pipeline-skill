@@ -1,0 +1,9 @@
+id;page;stage;hours;parallelism
+D1;Главная;design;34;all
+D2;Проект;design;16;1
+S1;Подготовка;setup;4;1
+A1;Согласование;review;4;1
+F1;Главная;frontend;16;1
+F2;Проект;frontend;12;1
+Q1;Запуск;qa;8;1
+R1;Запуск;release;2;1

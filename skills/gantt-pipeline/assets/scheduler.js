@@ -15,23 +15,30 @@
   function settingsShapeErrors(settings,label){
     if(settings===undefined)return [];
     if(!record(settings))return [label+' должен быть объектом'];
-    return ['capacities','stageDurations','overrides'].filter(k=>own(settings,k)&&!record(settings[k])).map(k=>label+'.'+k+' должен быть объектом');
+    return ['capacities','stageDurations','overrides','resources','dayHours'].filter(k=>own(settings,k)&&!record(settings[k])).map(k=>label+'.'+k+' должен быть объектом');
   }
-  function calendar(holidays=[]){
-    const off=new Set(holidays);
-    function isWorkday(d){const n=new Date(d+'T12:00:00Z').getUTCDay();return n!==0&&n!==6&&!off.has(d);}
+  const RU2026_OFF=['2026-01-01','2026-01-02','2026-01-03','2026-01-04','2026-01-05','2026-01-06','2026-01-07','2026-01-08','2026-01-09','2026-02-23','2026-03-08','2026-03-09','2026-05-01','2026-05-09','2026-05-11','2026-06-12','2026-11-04','2026-12-31'];
+  const RU2026_SHORT=['2026-04-30','2026-05-08','2026-06-11','2026-11-03'];
+  function calendar(input=[]){
+    const cfg=Array.isArray(input)?{holidays:input}:input,ru=cfg.calendar==='ru-2026';
+    const off=new Set([...(ru?RU2026_OFF:[]),...(cfg.holidays||[])]),short=new Set(ru?RU2026_SHORT:[]);
+    function hours(d){if(own(cfg.dayHours,d))return cfg.dayHours[d];const n=new Date(d+'T12:00:00Z').getUTCDay();return n===0||n===6||off.has(d)?0:short.has(d)?7:8;}
+    function isWorkday(d){return hours(d)>0;}
+    function covered(d){return !ru||d.slice(0,4)==='2026';}
     function on(d){for(let i=0;i<=MAX_DAYS;i++,d=shift(d,1))if(isWorkday(d))return d;throw Error('Нет рабочих дней в пределах пяти лет');}
     function nextWorkday(d){return on(shift(d,1));}
     function end(d,n){for(let i=1;i<n;i++)d=nextWorkday(d);return d;}
     function span(a,b){if(!a||!b)return null;let n=0;for(let d=a;d<=b;d=shift(d,1))if(isWorkday(d))n++;return n;}
-    return {isWorkday,nextWorkday,end,span,on};
+    return {isWorkday,nextWorkday,end,span,on,hours,covered};
   }
   function mergedSettings(project,overrides={}){
     const base=project.settings||{};
     return {...base,...overrides,
       capacities:Object.assign(Object.create(null),base.capacities||{},overrides.capacities||{}),
       stageDurations:Object.assign(Object.create(null),base.stageDurations||{},overrides.stageDurations||{}),
-      overrides:Object.assign(Object.create(null),base.overrides||{},overrides.overrides||{}),
+      overrides:Object.assign(Object.create(null),own(overrides,'overrides')?overrides.overrides:base.overrides||{}),
+      resources:Object.assign(Object.create(null),base.resources||{},overrides.resources||{}),
+      dayHours:Object.assign(Object.create(null),own(overrides,'dayHours')?overrides.dayHours:base.dayHours||{}),
       holidays:overrides.holidays??base.holidays??[],
       preserveSourceDates:overrides.preserveSourceDates??base.preserveSourceDates??true};
   }
@@ -39,8 +46,22 @@
     if(t.milestone)return 0;
     const override=cfg.overrides?.[t.id]||{};
     if(own(override,'duration'))return override.duration;
+    if(t.estimateHours!=null&&!cfg.preserveSourceDates)return null;
     if((override.moveTo||cfg.preserveSourceDates)&&t.sourceStart&&t.sourceEnd)return cal.span(t.sourceStart,t.sourceEnd);
     return t.duration??cfg.stageDurations?.[t.stage]??(t.sourceStart&&t.sourceEnd?cal.span(t.sourceStart,t.sourceEnd):null);
+  }
+  function demand(t,cfg,pool){const n=cfg.overrides?.[t.id]?.parallelism??t.parallelism??1;return n==='all'?(cfg.capacities[pool]||1):n;}
+  function hourly(t,cfg){return !t.milestone&&t.estimateHours!=null&&!own(cfg.overrides?.[t.id],'duration');}
+  function effortInterval(t,cfg,cal,pool,start){
+    const resource=cfg.resources[pool],workers=demand(t,cfg,pool),h=resource?.hoursPerDay;
+    if(!h)return {blocked:'Не заданы часы в день для ресурса '+pool};
+    let remaining=t.estimateHours,d=start,n=0;
+    for(let tries=0;tries<=MAX_DAYS;tries++,d=shift(d,1)){
+      if(!cal.covered(d))return {blocked:'Производственный календарь не подтверждён для '+d.slice(0,4)};
+      if(!cal.isWorkday(d))continue;
+      const available=(resource.shortDayPolicy==='cap'?Math.min(h,cal.hours(d)):Math.max(0,h-(8-cal.hours(d))))*workers;
+      n++;remaining-=available;if(remaining<1e-8)return {end:d,duration:n,workers};
+    }return {blocked:'Часовая оценка выходит за горизонт расчёта'};
   }
   function validate(project){
     const errors=[],dates=[];const err=s=>errors.push(s);
@@ -58,6 +79,14 @@
     checkDate(cfg.start,'settings.start');
     if(!Array.isArray(cfg.holidays))err('holidays должен быть массивом');else cfg.holidays.forEach((d,i)=>checkDate(d,'holidays['+i+']'));
     if(typeof cfg.preserveSourceDates!=='boolean')err('preserveSourceDates должен быть boolean');
+    if(cfg.calendar!==undefined&&!['weekdays','ru-2026'].includes(cfg.calendar))err('Неизвестный календарь');
+    for(const [d,h] of Object.entries(cfg.dayHours)){checkDate(d,'dayHours');if(!Number.isFinite(h)||h<0||h>8)err('Часы календаря: 0–8');}
+    for(const [key,r] of Object.entries(cfg.resources)){
+      if(!slug(key)||!record(r)){err('Некорректный ресурс '+key);continue;}
+      if(r.label!==undefined&&(typeof r.label!=='string'||!r.label.trim()))err('Нужно название роли '+key);
+      if(r.hoursPerDay!=null&&(!Number.isFinite(r.hoursPerDay)||r.hoursPerDay<=0||r.hoursPerDay>8))err('Часы в день '+key+': больше 0 и не больше 8');
+      if(r.shortDayPolicy!==undefined&&!['subtract','cap'].includes(r.shortDayPolicy))err('Неизвестное правило сокращённого дня');
+    }
     for(const s of project.stages){
       if(!record(s)||!slug(s.id)){err('Некорректный этап');continue;}
       if(stages.has(s.id))err('Повторный этап '+s.id);stages.set(s.id,s);
@@ -80,6 +109,10 @@
       if(t.milestone&&t.duration!==0)err('Веха '+t.id+' должна иметь duration:0');
       else if(!t.milestone&&t.duration!==null&&t.duration!==undefined&&!integer(t.duration,1,260))err('Длительность '+t.id+': целое 1–260 или null');
       if(t.resourceGroup!==null&&t.resourceGroup!==undefined&&!slug(t.resourceGroup))err('Некорректный resourceGroup '+t.id);
+      if(t.estimateHours!=null&&(!Number.isFinite(t.estimateHours)||t.estimateHours<=0||t.estimateHours>100000))err('Оценка в часах должна быть положительной: '+t.id);
+      if(t.milestone&&t.estimateHours!=null)err('Веха не имеет часовой оценки: '+t.id);
+      if(t.estimateHours!=null&&!stages.get(t.stage)?.pool)err('Часовой задаче нужен ресурс: '+t.id);
+      if(t.parallelism!==undefined&&t.parallelism!=='all'&&!integer(t.parallelism,1,20))err('Исполнители задачи: 1–20 или all');
       for(const k of ['sourceStart','sourceEnd','notBefore'])checkDate(t[k],t.id+'.'+k);
       if(t.sourceStart&&!t.sourceEnd)err('У sourceStart должен быть sourceEnd: '+t.id);
       if(dateOK(t.sourceStart)&&dateOK(t.sourceEnd)&&t.sourceEnd<t.sourceStart)err('Окончание раньше начала: '+t.id);
@@ -88,7 +121,8 @@
     for(const [id,o] of Object.entries(cfg.overrides)){
       if(!by.has(id))err('Изменение неизвестной задачи '+id);
       if(!record(o)){err('Некорректное изменение '+id);continue;}
-      for(const k of Object.keys(o))if(!['moveTo','duration','ready'].includes(k))err('Неизвестное поле изменения '+id+'.'+k);
+      for(const k of Object.keys(o))if(!['moveTo','duration','ready','parallelism'].includes(k))err('Неизвестное поле изменения '+id+'.'+k);
+      if(o.parallelism!==undefined&&o.parallelism!=='all'&&!integer(o.parallelism,1,20))err('Исполнители задачи: 1–20 или all');
       for(const k of ['moveTo','ready'])checkDate(o[k],id+'.'+k);
       if(own(o,'duration')&&!integer(o.duration,by.get(id)?.milestone?0:1,by.get(id)?.milestone?0:260))err('Некорректная override.duration '+id);
     }
@@ -99,10 +133,10 @@
       if(by.get(id)?.status==='included')err('Включённая задача не может быть предшественником: '+id);
     }
     if(errors.length)return errors;
-    const cal=calendar(cfg.holidays),groups=new Map();
+    const cal=calendar(cfg),groups=new Map();
     for(const t of by.values())if(t.resourceGroup){const list=groups.get(t.resourceGroup)||[];list.push(t);groups.set(t.resourceGroup,list);}
     for(const [id,members] of groups){
-      const signature=t=>JSON.stringify([t.stage,stages.get(t.stage).pool||null,[...t.dependsOn].sort(),taskDuration(t,cfg,cal),!!t.milestone,t.status||'planned',cfg.preserveSourceDates?[t.sourceStart||null,t.sourceEnd||null]:null]);
+      const signature=t=>JSON.stringify([t.stage,stages.get(t.stage).pool||null,[...t.dependsOn].sort(),taskDuration(t,cfg,cal),t.estimateHours??null,cfg.overrides[t.id]?.parallelism??t.parallelism??1,!!t.milestone,t.status||'planned',cfg.preserveSourceDates?[t.sourceStart||null,t.sourceEnd||null]:null]);
       if(new Set(members.map(signature)).size!==1)err('Несовместимые этапы, зависимости, длительности или исходные интервалы resourceGroup '+id);
       const moves=new Set(members.map(t=>cfg.overrides[t.id]?.moveTo).filter(Boolean));if(moves.size>1)err('Разные moveTo внутри resourceGroup '+id);
     }
@@ -119,7 +153,7 @@
     if(shapeErrors.length)throw Error(shapeErrors.join('\n'));
     const config=mergedSettings(project,configOverrides),errors=validate({...project,settings:config});
     if(errors.length)throw Error(errors.join('\n'));
-    const cal=calendar(config.holidays),warnings=[],stages=new Map(project.stages.map(s=>[s.id,s])),original=new Map(project.tasks.map(t=>[t.id,t]));
+    const cal=calendar(config),warnings=[],stages=new Map(project.stages.map(s=>[s.id,s])),original=new Map(project.tasks.map(t=>[t.id,t]));
     const tasks=project.tasks.map(t=>({...t,dependsOn:[...t.dependsOn],start:null,end:null,duration:null,blocked:null,critical:false,totalFloat:null,freeFloat:null,conflicts:[]}));
     const by=new Map(tasks.map(t=>[t.id,t])),units=[],unitBy=new Map(),groupBy=new Map();
     for(const t of tasks){
@@ -139,21 +173,29 @@
     function doneStatus(u){return ['completed','included'].includes(original.get(u.id).status);}
     const allDates=[config.start,...tasks.flatMap(t=>[t.sourceStart,t.sourceEnd,t.notBefore]),...Object.values(config.overrides).flatMap(o=>[o.moveTo,o.ready])].filter(Boolean).sort();
     const first=allDates[0]||null,horizon=first?shift(first,MAX_DAYS):null;
-    const allocations=[],fixed=[];
-    for(const u of units){const interval=sourceInterval(u);if(interval&&!doneStatus(u)&&!ownBlock(u)&&!original.get(u.id).milestone&&u.pool)fixed.push({id:u.id,pool:u.pool,...interval});}
+    const allocations=[],fixed=[],manual=new Set();
+    function prioritize(id){if(manual.has(id))return;manual.add(id);for(const dep of original.get(id)?.dependsOn||[])prioritize(dep);}
+    for(const [id,o]of Object.entries(config.overrides))if(o.moveTo)prioritize(id);
+    for(const u of units){const interval=sourceInterval(u);if(interval&&!doneStatus(u)&&!ownBlock(u)&&!original.get(u.id).milestone&&u.pool&&!manual.size)fixed.push({id:u.id,pool:u.pool,workers:demand(original.get(u.id),config,u.pool),...interval});}
+    let resourceBlock=null;
     function resourceStart(u,a,n){
+      resourceBlock=null;
       if(!u.pool||n===0)return a;
       const cap=config.capacities[u.pool];if(!cap)return null;
       const occupied=[...fixed,...allocations].filter(r=>r.pool===u.pool&&r.id!==u.id);
       for(;a<=horizon;a=cal.nextWorkday(a)){
-        const b=cal.end(a,n);if(b>horizon)return null;
-        let fits=true;for(let d=a;d<=b;d=cal.nextWorkday(d))if(occupied.filter(r=>r.start<=d&&r.end>=d).length>=cap){fits=false;break;}
+        const effort=hourly(original.get(u.id),config)?effortInterval(original.get(u.id),config,cal,u.pool,a):null;
+        if(effort?.blocked){resourceBlock=effort.blocked;return null;}
+        const b=effort?.end||cal.end(a,n);if(b>horizon)return null;
+        let fits=true;for(let d=a;d<=b;d=cal.nextWorkday(d))if(occupied.filter(r=>r.start<=d&&r.end>=d).reduce((sum,r)=>sum+(r.workers||1),0)+demand(original.get(u.id),config,u.pool)>cap){fits=false;break;}
         if(fits)return a;
       }return null;
     }
     const pending=new Set(units),finished=new Set();
     function readiness(u){
-      let date=max(config.start,...u.members.map(t=>t.notBefore),...options(u).flatMap(o=>[o.ready,o.moveTo])),block=ownBlock(u);
+      const historical=original.get(u.id).sourceStart;
+      const floor=historical&&historical<config.start&&options(u).some(o=>o.moveTo)?[historical,...options(u).map(o=>o.moveTo).filter(Boolean)].sort()[0]:config.start;
+      let date=max(floor,...u.members.map(t=>t.notBefore),...options(u).flatMap(o=>[o.ready,o.moveTo])),block=ownBlock(u);
       for(const t of u.members)for(const id of t.dependsOn){
         const v=unitBy.get(id);if(!finished.has(v))return {waiting:true};
         const d=by.get(id);if(d.blocked||!d.end)block=block||'Ожидает '+id+': '+(d.blocked||'готовность не подтверждена');
@@ -162,7 +204,15 @@
     }
     function assign(u,data){u.members.forEach(t=>Object.assign(t,data));}
     function execute(u,ready){
-      const s=original.get(u.id),interval=sourceInterval(u),over=options(u),move=max(...over.map(o=>o.moveTo));
+      const s=original.get(u.id),over=options(u),move=max(...over.map(o=>o.moveTo));let interval=sourceInterval(u);
+      // A local manual edit may push ordinary source intervals, but never alters the source fields.
+      if(interval&&manual.size&&!doneStatus(u)&&!ownBlock(u)&&!ready.block){
+        const occupied=allocations.filter(r=>r.pool===u.pool&&r.start<=interval.end&&r.end>=interval.start);
+        let overCapacity=false;for(let d=interval.start;config.capacities[u.pool]&&d<=interval.end;d=cal.nextWorkday(d))if(occupied.filter(r=>r.start<=d&&r.end>=d).reduce((n,r)=>n+(r.workers||1),0)+demand(s,config,u.pool)>config.capacities[u.pool]){overCapacity=true;break;}
+        if(overCapacity||s.dependsOn.some(id=>{const d=by.get(id);return d.end&&interval.start<(d.milestone?d.end:cal.nextWorkday(d.end));})){
+          ready.date=max(ready.date,interval.start);interval=null;
+        }
+      }
       if(doneStatus(u)){
         if(s.status==='completed')assign(u,{start:s.sourceStart||null,end:s.sourceEnd||null,duration:s.milestone?0:s.duration??null});
         if(move)warnings.push('Строка '+u.id+' завершена или включена в другую работу; перенос проигнорирован');return;
@@ -174,23 +224,29 @@
         for(const t of u.members)for(const id of t.dependsOn){const d=by.get(id);if(d.end&&interval.start<(d.milestone?d.end:cal.nextWorkday(d.end)))conflicts.push('Исходный интервал начинается раньше готовности '+id);}
         if(u.members.some(t=>t.notBefore&&interval.start<t.notBefore))conflicts.push('Исходное начало раньше notBefore');
         if(!cal.isWorkday(interval.start)||!cal.isWorkday(interval.end))conflicts.push('Граница исходного интервала попадает на нерабочий день');
+        if(!cal.covered(interval.start)||!cal.covered(interval.end))conflicts.push('Производственный календарь не подтверждён для исходного интервала');
         assign(u,{...interval,duration:s.milestone?0:cal.span(interval.start,interval.end),conflicts:[...new Set(conflicts)],blocked:ready.block||null});
+        if(manual.size&&u.pool&&!s.milestone)allocations.push({id:u.id,pool:u.pool,...interval,workers:demand(s,config,u.pool)});
         return;
       }
       if(ready.block){assign(u,{blocked:ready.block});return;}
-      const n=taskDuration(s,config,cal);
-      if(n===null){assign(u,{blocked:'Длительность не оценена'});return;}
+      let n=taskDuration(s,config,cal);
+      if(n===null&&!hourly(s,config)){assign(u,{blocked:'Длительность не оценена'});return;}
       if(!ready.date){assign(u,{blocked:'Дата начала или готовности не задана'});return;}
-      if(u.pool&&n>0&&!config.capacities[u.pool]){assign(u,{blocked:'Не определено число потоков ресурса '+u.pool});return;}
-      const a=resourceStart(u,ready.date,n),b=a?cal.end(a,n):null;
-      if(!a||b>horizon){assign(u,{blocked:'Расчёт выходит за горизонт пяти лет'});return;}
-      assign(u,{start:a,end:b,duration:n,scheduleGroup:u.id});if(u.pool&&n>0)allocations.push({id:u.id,pool:u.pool,start:a,end:b});
+      if(u.pool&&!s.milestone&&!config.capacities[u.pool]){assign(u,{blocked:'Не определено число потоков ресурса '+u.pool});return;}
+      if(u.pool&&!s.milestone&&demand(s,config,u.pool)>config.capacities[u.pool]){assign(u,{blocked:'Задаче нужно больше исполнителей, чем доступно в команде'});return;}
+      if(hourly(s,config)){const effort=effortInterval(s,config,cal,u.pool,ready.date);if(effort.blocked){assign(u,{blocked:effort.blocked});return;}n=effort.duration;}
+      const a=resourceStart(u,ready.date,n),effort=a&&hourly(s,config)?effortInterval(s,config,cal,u.pool,a):null,b=effort?.end||(a?cal.end(a,n):null);
+      if(effort)n=effort.duration;
+      if(!a||b>horizon){assign(u,{blocked:resourceBlock||'Расчёт выходит за горизонт пяти лет'});return;}
+      if(!cal.covered(a)||!cal.covered(b)){assign(u,{blocked:'Производственный календарь не подтверждён для '+b.slice(0,4)});return;}
+      assign(u,{start:a,end:b,duration:n,scheduleGroup:u.id,workers:demand(s,config,u.pool),scheduleBasis:hourly(s,config)?'hours':'days'});if(u.pool&&n>0)allocations.push({id:u.id,pool:u.pool,start:a,end:b,workers:demand(s,config,u.pool)});
     }
     while(pending.size){
       const ready=[...pending].map(u=>({u,r:readiness(u)})).filter(x=>!x.r.waiting);
       if(!ready.length)throw Error('Не удалось упорядочить группы зависимостей');
       const priority=x=>max(...options(x.u).map(o=>o.moveTo))||sourceInterval(x.u)?.start||x.r.date||'9999-12-31';
-      ready.sort((a,b)=>priority(a).localeCompare(priority(b))||a.u.id.localeCompare(b.u.id));
+      ready.sort((a,b)=>Number(b.u.members.some(t=>manual.has(t.id)))-Number(a.u.members.some(t=>manual.has(t.id)))||priority(a).localeCompare(priority(b))||a.u.id.localeCompare(b.u.id));
       const {u,r}=ready[0];execute(u,r);pending.delete(u);finished.add(u);
     }
     // Complete source intervals survive conflicts, but are not certified feasible.
@@ -199,7 +255,7 @@
     for(const u of occupied){const t=by.get(u.id),cap=config.capacities[u.pool];
       if(!cap){t.conflicts.push('Ёмкость ресурса '+u.pool+' не подтверждена');u.members.forEach(m=>{m.conflicts=[...new Set(t.conflicts)];});overloaded.add(u.pool);continue;}
       for(let d=t.start;d<=t.end;d=cal.nextWorkday(d)){
-        if(occupied.filter(v=>v.pool===u.pool&&by.get(v.id).start<=d&&by.get(v.id).end>=d).length>cap){t.conflicts.push('Превышено число потоков ресурса '+u.pool);overloaded.add(u.pool);break;}
+        if(occupied.filter(v=>v.pool===u.pool&&by.get(v.id).start<=d&&by.get(v.id).end>=d).reduce((sum,v)=>sum+demand(original.get(v.id),config,v.pool),0)>cap){t.conflicts.push('Превышено число потоков ресурса '+u.pool);overloaded.add(u.pool);break;}
       }
       u.members.forEach(m=>{m.conflicts=[...new Set(t.conflicts)];});
     }
@@ -219,7 +275,7 @@
     if(!timed.length)return result;
     if(timed.some(u=>u.members.some(t=>t.conflicts.some(s=>!s.includes('ресурса'))))){result.criticalNote='Резерв не рассчитан: конфликт исходных дат, календаря или зависимостей.';return result;}
     const first=timed.map(u=>u.members[0].start).sort()[0],index=d=>cal.span(first,d)-1,by=new Map(),nodes=[];
-    for(const u of timed){const t=u.members[0],n={id:u.id,pool:u.pool,members:u.members,start:index(t.start),end:index(t.end),milestone:!!t.milestone,out:[],incoming:0};nodes.push(n);u.members.forEach(t=>by.set(t.id,n));}
+    for(const u of timed){const t=u.members[0],n={id:u.id,pool:u.pool,workers:demand(t,cfg,u.pool),members:u.members,start:index(t.start),end:index(t.end),milestone:!!t.milestone,out:[],incoming:0};nodes.push(n);u.members.forEach(t=>by.set(t.id,n));}
     const edges=new Map();
     function edge(a,b,lag,resource,from=a?.id,to=b?.id){if(!a||!b||a===b)return;const key=a.id+'|'+b.id,old=edges.get(key);if(old){old.lag=Math.max(old.lag,lag);if(!resource){old.resource=false;old.from=from;old.to=to;}return;}const e={a,b,lag,resource,from,to};edges.set(key,e);a.out.push(e);b.incoming++;}
     for(const t of tasks)if(by.has(t.id))for(const id of t.dependsOn){const a=by.get(id);edge(a,by.get(t.id),a?.milestone?0:1,false,id,t.id);}
@@ -229,7 +285,7 @@
       const lanes=Array(cfg.capacities[id]).fill(null),pairs=[];let valid=true;
       for(const n of pool.sort((a,b)=>a.start-b.start||a.end-b.end||a.id.localeCompare(b.id))){
         const free=lanes.map((last,i)=>({last,i})).filter(x=>!x.last||x.last.end<n.start).sort((a,b)=>(b.last?.end??-Infinity)-(a.last?.end??-Infinity));
-        if(!free.length){valid=false;break;}const {last,i}=free[0];if(last)pairs.push([last,n]);lanes[i]=n;
+        if(free.length<n.workers){valid=false;break;}for(const {last,i} of free.slice(0,n.workers)){if(last)pairs.push([last,n]);lanes[i]=n;}
       }
       if(!valid){result.resourceOrderValid=false;overloaded.add(id);continue;}for(const [a,b] of pairs)edge(a,b,1,true);
     }
@@ -243,6 +299,7 @@
     }
     for(const e of edges.values())if(!overloaded.has(e.a.pool)&&!overloaded.has(e.b.pool)&&e.a.float===0&&e.b.float===0&&e.b.start===e.a.end+e.lag)result.criticalEdges.push({from:e.from,to:e.to,resource:e.resource});
     result.criticalNote+=' Резерв в рабочих днях при текущем порядке потоков; проверяйте переносы по одной задаче.';
+    if(tasks.some(t=>t.scheduleBasis==='hours'))result.criticalNote+=' Для часовых задач резерв относится к текущим интервалам; перенос через сокращённый день может изменить длительность.';
     if(!result.resourceOrderValid)result.criticalNote+=' Для перегруженных или неоценённых ресурсов резерв неизвестен; ресурсные связи исключены.';
     return result;
   }

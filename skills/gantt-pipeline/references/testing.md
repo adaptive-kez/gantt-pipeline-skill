@@ -8,6 +8,8 @@ node --test tests/*.test.cjs
 
 No packages or real credentials are required. Scheduler tests cover capacity, shared QA pools, milestones, holidays, fixed-source conflicts, grouped batches, unknown estimates, dependency validation, total/free float and safe moves. Pipeline tests cover quote grounding, Aspro identity/idempotency, read-back, PM composition confirmation, source dates and client sanitisation. UI tests exercise the production handlers with a DOM fixture. Export tests inspect generated OOXML. Sync tests inject synthetic responses and start a temporary loopback HTTP server; a sandbox may require local-network permission.
 
+Hourly tests additionally cover the RF2026 full-year totals, transferred/shortened dates, explicit working weekends, hours per person, divisible versus parallel tasks, weighted resource reservations, unknown inputs/year coverage, CSV matching, immutable effort and cascading edits. Use the synthetic hourly example for browser checks of start/end/duration, reverting to hours, exact drag/undo, resource controls and calendar-aware XLSX. Verify that editing a field commits once rather than duplicating history on blur/click.
+
 ## Forward evaluation
 
 Give an independent agent the skill and a realistic new brief without the expected answer. Use an isolated output directory and no external writes. A useful case is a school website with a home page, catalog, unique course page without a wireframe, applications and migration of old materials; one designer is known, estimates and other capacities are unknown, frontend depends on environment readiness.

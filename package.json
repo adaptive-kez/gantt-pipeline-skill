@@ -1,6 +1,6 @@
 {
   "name": "gantt-pipeline-skill",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Codex skill: project brief, Aspro tasks, interactive Gantt and visual spreadsheet export",
   "engines": {"node": ">=20"},
